@@ -1,0 +1,241 @@
+import tkinter as tk
+from tkinter import messagebox, ttk
+import json
+import os
+
+FILE_NAME = "chores.json"
+
+# Load saved chores
+def load_chores():
+    if os.path.exists(FILE_NAME):
+        try:
+            with open(FILE_NAME, "r") as file:
+                return json.load(file)
+        except (json.JSONDecodeError, OSError):
+            return []
+    return []
+
+chores = load_chores()
+
+# Save chores
+def save_chores():
+    with open(FILE_NAME, "w") as file:
+        json.dump(chores, file, indent=4)
+
+# Add chore
+def add_chore():
+    name = chore_entry.get().strip()
+    person = person_entry.get().strip()
+
+    if not name:
+        messagebox.showwarning("Warning", "Enter a chore name.")
+        return
+
+    chores.append({
+        "name": name,
+        "person": person,
+        "done": False
+    })
+
+    chore_entry.delete(0, tk.END)
+    person_entry.delete(0, tk.END)
+
+    save_chores()
+    show_chores()
+
+# Show chores
+def show_chores():
+    for item in tree.get_children():
+        tree.delete(item)
+
+    selected_filter = filter_box.get()
+
+    for index, chore in enumerate(chores):
+        status = "Completed" if chore["done"] else "Pending"
+
+        if selected_filter != "All" and selected_filter != status:
+            continue
+
+        tree.insert("", tk.END, iid=str(index), values=(
+            chore["name"],
+            chore["person"] or "Unassigned",
+            status
+        ))
+
+    completed = sum(chore["done"] for chore in chores)
+    total = len(chores)
+
+    total_label.config(text=f"Total Chores: {total}")
+    completed_label.config(text=f"Completed: {completed}")
+    pending_label.config(text=f"Pending: {total - completed}")
+
+# Get selected chore
+def get_selected():
+    selected = tree.selection()
+
+    if not selected:
+        messagebox.showwarning("Warning", "Select a chore first.")
+        return None
+
+    return int(selected[0])
+
+# Mark completed or pending
+def toggle_chore():
+    index = get_selected()
+
+    if index is None:
+        return
+
+    chores[index]["done"] = not chores[index]["done"]
+
+    save_chores()
+    show_chores()
+
+# Edit chore
+def edit_chore():
+    index = get_selected()
+
+    if index is None:
+        return
+
+    name = chore_entry.get().strip()
+    person = person_entry.get().strip()
+
+    if not name:
+        messagebox.showwarning(
+            "Warning",
+            "Enter the updated chore name above."
+        )
+        return
+
+    chores[index]["name"] = name
+    chores[index]["person"] = person
+
+    save_chores()
+    show_chores()
+
+# Delete chore
+def delete_chore():
+    index = get_selected()
+
+    if index is None:
+        return
+
+    if messagebox.askyesno("Confirm", "Delete this chore?"):
+        chores.pop(index)
+        save_chores()
+        show_chores()
+
+# Load selected chore into input fields
+def select_chore(event):
+    selected = tree.selection()
+
+    if not selected:
+        return
+
+    chore = chores[int(selected[0])]
+
+    chore_entry.delete(0, tk.END)
+    chore_entry.insert(0, chore["name"])
+
+    person_entry.delete(0, tk.END)
+    person_entry.insert(0, chore["person"])
+
+# Main window
+root = tk.Tk()
+root.title("Household Chores Management System")
+root.geometry("750x550")
+
+tk.Label(
+    root,
+    text="Household Chores",
+    font=("Arial", 22, "bold")
+).pack(pady=15)
+
+tk.Label(
+    root,
+    text="Keep your home organized, one task at a time."
+).pack()
+
+# Input fields
+form = tk.Frame(root)
+form.pack(pady=15)
+
+tk.Label(form, text="Chore Name").grid(row=0, column=0)
+tk.Label(form, text="Assigned To").grid(row=0, column=1)
+
+chore_entry = tk.Entry(form, width=30)
+chore_entry.grid(row=1, column=0, padx=5)
+
+person_entry = tk.Entry(form, width=25)
+person_entry.grid(row=1, column=1, padx=5)
+
+tk.Button(
+    form,
+    text="Add Chore",
+    command=add_chore
+).grid(row=1, column=2, padx=5)
+
+# Dashboard
+dashboard = tk.Frame(root)
+dashboard.pack(pady=10)
+
+total_label = tk.Label(dashboard, font=("Arial", 12))
+total_label.grid(row=0, column=0, padx=20)
+
+completed_label = tk.Label(dashboard, font=("Arial", 12))
+completed_label.grid(row=0, column=1, padx=20)
+
+pending_label = tk.Label(dashboard, font=("Arial", 12))
+pending_label.grid(row=0, column=2, padx=20)
+
+# Filter
+filter_box = ttk.Combobox(
+    root,
+    values=["All", "Completed", "Pending"],
+    state="readonly"
+)
+filter_box.set("All")
+filter_box.pack(pady=10)
+filter_box.bind("<<ComboboxSelected>>", lambda event: show_chores())
+
+# Chore table
+tree = ttk.Treeview(
+    root,
+    columns=("Chore", "Assigned To", "Status"),
+    show="headings",
+    height=10
+)
+
+tree.heading("Chore", text="Chore")
+tree.heading("Assigned To", text="Assigned To")
+tree.heading("Status", text="Status")
+
+tree.pack(fill="both", expand=True, padx=20)
+tree.bind("<<TreeviewSelect>>", select_chore)
+
+# Action buttons
+buttons = tk.Frame(root)
+buttons.pack(pady=15)
+
+tk.Button(
+    buttons,
+    text="Edit",
+    command=edit_chore
+).grid(row=0, column=0, padx=5)
+
+tk.Button(
+    buttons,
+    text="Complete / Undo",
+    command=toggle_chore
+).grid(row=0, column=1, padx=5)
+
+tk.Button(
+    buttons,
+    text="Delete",
+    command=delete_chore
+).grid(row=0, column=2, padx=5)
+
+show_chores()
+root.mainloop()
+
